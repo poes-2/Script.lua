@@ -3,7 +3,7 @@ local player = game.Players.LocalPlayer
 local data = player.Data
 local backpack = player.Backpack --
 
-local URL = "ใส่_LINK_REPLIT_ของคุณ_ตรงนี้/update"
+local URL = "https://b8c57f00-6777-466d-af24-5995a7db0f38-00-2clf2cbn9f528.pike.replit.dev/"
 
 function updateToWeb()
     local myItems = {}
