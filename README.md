@@ -1,116 +1,53 @@
+-- ตรวจสอบว่า HttpService ถูกบล็อกหรือไม่
 local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
-local Webhook_URL = "https://discord.com/api/webhooks/1336650358130343989/SnQRVJtPPbHaig37At3lDMbR5xf5kheipbnG6rrjhM95QZgFkJ5YJJTLlmckEC_zLjuA" -- แทนที่ด้วย Webhook ของคุณ
 
-local startTime = os.time() -- เริ่มจับเวลา
+-- ลิงก์ Ngrok ของคุณ (แก้ไขให้ถูกต้อง)
+local API_URL = "https://maniform-plaguily-keven.ngrok-free.dev/update" 
 
-local function getCharacterInfo()
-    local characters = {}
-    for _, v in pairs(LocalPlayer.Character:GetChildren()) do
-        if v:IsA("Model") then
-            local level = "??" -- ค่าเริ่มต้นหากหาเลเวลไม่เจอ
-            for _, stat in pairs(v:GetChildren()) do
-                if stat:IsA("IntValue") and stat.Name == "Level" then
-                    level = stat.Value
-                end
-            end
-            table.insert(characters, "- " .. v.Name .. " (Lv " .. level .. ")")
+local function sendDataToHost()
+    -- ใช้ pcall เพื่อป้องกันเกมค้างถ้าส่งไม่ผ่าน
+    local success, result = pcall(function()
+        -- เช็คชื่อโฟลเดอร์เก็บข้อมูล (ลองเปลี่ยนจาก "Data" เป็น "leaderstats" ถ้าไม่ขึ้น)
+        local dataFolder = LocalPlayer:FindFirstChild("Data") or LocalPlayer:FindFirstChild("leaderstats")
+        
+        if not dataFolder then
+            return "Folder not found"
         end
-    end
-    return #characters > 0 and table.concat(characters, "\n") or "ไม่พบข้อมูล"
-end
 
-local function getRewards()
-    local rewards = {}
-    for _, v in pairs(LocalPlayer.PlayerGui:GetDescendants()) do
-        if v:IsA("TextLabel") and string.find(v.Text, "Reward:") then
-            table.insert(rewards, v.Text)
+        -- ดึงค่ามาเตรียมส่ง
+        local payload = {
+            ["player_name"] = LocalPlayer.Name,
+            ["level"]       = tostring(dataFolder:FindFirstChild("Level") and dataFolder.Level.Value or "0"),
+            ["beli"]        = tostring(dataFolder:FindFirstChild("Beli") and dataFolder.Beli.Value or "0"),
+            ["fruit"]       = tostring(dataFolder:FindFirstChild("DevilFruit") and dataFolder.DevilFruit.Value or "None"),
+            ["race"]        = tostring(dataFolder:FindFirstChild("Race") and dataFolder.Race.Value or "None")
+        }
+
+        -- ส่งข้อมูล (ใช้ฟังก์ชันมาตรฐานที่ Executor ทั่วไปรองรับ)
+        if request then -- สำหรับ Executor บางตัวที่ใช้ฟังก์ชัน request()
+            return request({
+                Url = API_URL,
+                Method = "POST",
+                Headers = { ["Content-Type"] = "application/json" },
+                Body = HttpService:JSONEncode(payload)
+            })
+        else -- สำหรับ Executor ปกติ
+            return HttpService:PostAsync(API_URL, HttpService:JSONEncode(payload), Enum.HttpContentType.ApplicationJson)
         end
-    end
-    return #rewards > 0 and table.concat(rewards, "\n") or "ไม่มีของรางวัล"
-end
+    end)
 
-local function getMapName()
-    for _, v in pairs(LocalPlayer.PlayerGui:GetDescendants()) do
-        if v:IsA("TextLabel") and string.find(v.Text, "Map:") then
-            return v.Text:gsub("Map: ", "")
-        end
-    end
-    return "Unknown"
-end
-
-local function getPlayerStats()
-    local stats = {
-        damage = "ไม่พบข้อมูล",
-        kills = "ไม่พบข้อมูล",
-        waves = "ไม่พบข้อมูล"
-    }
-    
-    for _, v in pairs(LocalPlayer.PlayerGui:GetDescendants()) do
-        if v:IsA("TextLabel") then
-            if string.find(v.Text, "Damage:") then
-                stats.damage = v.Text:gsub("Damage: ", "")
-            elseif string.find(v.Text, "Kills:") then
-                stats.kills = v.Text:gsub("Kills: ", "")
-            elseif string.find(v.Text, "Wave:") then
-                stats.waves = v.Text:gsub("Wave: ", "")
-            end
-        end
-    end
-    
-    return stats
-end
-
-local function getPlayerInfo()
-    return {
-        username = LocalPlayer.Name, -- ชื่อผู้เล่น Roblox
-        userId = LocalPlayer.UserId, -- ID ผู้เล่น
-        avatarUrl = "https://www.roblox.com/headshot-thumbnail/image?userId=" .. LocalPlayer.UserId .. "&width=420&height=420&format=png"
-    }
-end
-
-local function sendDiscordMessage()
-    local endTime = os.time()
-    local elapsedTime = endTime - startTime -- คำนวณเวลาที่ใช้
-    local playerInfo = getPlayerInfo()
-    local stats = getPlayerStats()
-
-    local data = {
-        ["username"] = "Anime Adventures Bot",
-        ["avatar_url"] = playerInfo.avatarUrl, -- ใช้รูปอวาตาร์ของผู้เล่น
-        ["embeds"] = {{
-            ["title"] = "✅ **Mission Complete!** 🎉",
-            ["color"] = 65280, -- สีเขียว
-            ["thumbnail"] = {["url"] = playerInfo.avatarUrl}, -- แสดงรูปอวาตาร์
-            ["fields"] = {
-                {["name"] = "👤 ผู้เล่น", ["value"] = playerInfo.username .. " (ID: " .. playerInfo.userId .. ")", ["inline"] = false},
-                {["name"] = "📍 ด่านที่เล่น", ["value"] = getMapName(), ["inline"] = true},
-                {["name"] = "🕒 ใช้เวลา", ["value"] = elapsedTime .. " วินาที", ["inline"] = true},
-                {["name"] = "🎭 ตัวละครที่ใช้", ["value"] = getCharacterInfo(), ["inline"] = false},
-                {["name"] = "⚔️ Damage", ["value"] = stats.damage, ["inline"] = true},
-                {["name"] = "💀 Kills", ["value"] = stats.kills, ["inline"] = true},
-                {["name"] = "🌊 จำนวน Wave", ["value"] = stats.waves, ["inline"] = true},
-                {["name"] = "🎁 ของที่ได้รับ", ["value"] = getRewards(), ["inline"] = false}
-            }
-        }}
-    }
-
-    local jsonData = HttpService:JSONEncode(data)
-    HttpService:PostAsync(Webhook_URL, jsonData, Enum.HttpContentType.ApplicationJson)
-end
-
-local function detectMissionComplete()
-    while wait(1) do
-        for _, v in pairs(LocalPlayer.PlayerGui:GetDescendants()) do
-            if v:IsA("TextLabel") and string.find(v.Text, "Victory") then
-                sendDiscordMessage()
-                print("✅ ส่งข้อมูลไปยัง Discord แล้ว!")
-                return
-            end
-        end
+    if success then
+        print("✅ ข้อมูลส่งไปถึงหน้าเว็บแล้ว!")
+    else
+        warn("❌ ส่งไม่สำเร็จ: " .. tostring(result))
     end
 end
 
-print("กำลังรอตรวจจับการจบของด่าน...")
-detectMissionComplete()
+-- เริ่มทำงาน
+print("🚀 ระบบกำลังเริ่มเชื่อมต่อกับคอมพิวเตอร์ของคุณ...")
+while true do
+    sendDataToHost()
+    task.wait(5)
+end
